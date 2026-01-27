@@ -120,7 +120,7 @@ Gold Layer (/data/gold/)
 ## Project Structure
 
 ```
-brewery-dbrewery/             # Airflow DAGs & configuration
+dags/brewery                  # Airflow DAGs & configuration
 │   ├── brewery_pipeline.py   # Main DAG definition
 │   └── brewery_config.yaml   # Pipeline configuration
 ├── src/                      # Source code
