@@ -1,5 +1,5 @@
-# Recreate Virtual Environment with Python 3.11
-# Run this script to recreate bees-venv with the correct Python version
+# Create Virtual Environment with Python 3.11
+# Run this script to create or recreate bees-venv with the correct Python version
 
 Write-Host "Recreating virtual environment with Python 3.11.9..." -ForegroundColor Cyan
 Write-Host ""
