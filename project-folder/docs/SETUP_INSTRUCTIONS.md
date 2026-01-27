@@ -3,7 +3,7 @@
 ## Quick Verification
 
 ```powershell
-cd brewery-data-pipeline
+cd project-folder
 python test_setup.py
 ```
 

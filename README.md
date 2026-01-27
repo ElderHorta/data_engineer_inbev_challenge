@@ -54,7 +54,7 @@ make up          # Start services
 ```bash
 # 1. Clone the repository
 git clone <repository-url>
-cd brewery-data-pipeline
+cd project-folder
 
 # 2. Set up environment variables
 cp .env.example .env
@@ -136,7 +136,6 @@ brewery-dbrewery/             # Airflow DAGs & configuration
 ├── deploy.ps1                # Windows deployment automation
 ├── Makefile                  # Linux/macOS deployment automation
 └── docker-compose.yml        # Service orchestration files
-└── docs/                      # Documentation
 ```
 
 ## 📋 Pipeline Features

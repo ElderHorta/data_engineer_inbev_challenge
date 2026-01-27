@@ -1,4 +1,4 @@
-./brewery-data-pipeline/data/*
+./project-folder/data/*
 
 # Python
 __pycache__/
@@ -25,6 +25,7 @@ wheels/
 *.pyo
 *.pyd
 .Python
+.github/*
 
 # Virtual environments
 venv/
