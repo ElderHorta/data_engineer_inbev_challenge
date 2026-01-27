@@ -2,7 +2,7 @@
 
 A scalable, resilient Data Lake implementation following the Medallion Architecture (Bronze → Silver → Gold) for ingesting and processing brewery data from the Open Brewery DB API.
 
-## 🏗️ Architecture
+## Architecture
 
 This solution implements a production-ready data pipeline with:
 - **Medallion Architecture**: Bronze (raw) → Silver (cleaned) → Gold (aggregated)
@@ -12,7 +12,7 @@ This solution implements a production-ready data pipeline with:
 - **Quality**: SOLID-compliant validators per layer (BronzeValidator, SilverValidator, GoldValidator)
 - **Deployment**: Docker Compose with automated deployment scripts
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - Docker Desktop (with Docker Compose)
@@ -96,7 +96,7 @@ docker-compose exec airflow-webserver pytest tests/ --cov=src --cov-report=html
 docker-compose exec airflow-webserver pytest tests/unit/brewery/test_brewery_api.py -v
 ```
 
-## 📊 Data Flow
+## Data Flow
 
 ```breweries/
   - Raw JSON files
@@ -117,7 +117,7 @@ Gold Layer (/data/gold/)
   - Data quality metrics
 ```
 
-## 🗂️ Project Structure
+## Project Structure
 
 ```
 brewery-dbrewery/             # Airflow DAGs & configuration
@@ -138,7 +138,7 @@ brewery-dbrewery/             # Airflow DAGs & configuration
 └── docker-compose.yml        # Service orchestration files
 ```
 
-## 📋 Pipeline Features
+## Pipeline Features
 
 ### Data Quality
 - Schema validation at each layer (Bronze, Silver, Gold)
@@ -158,7 +158,7 @@ brewery-dbrewery/             # Airflow DAGs & configuration
 - Data quality dashboards
 - Alert notifications
 
-## 🔧 Configuration
+## Configuration
 
 Configuration is managed via:
 - **YAML**: `dags/brewery/brewery_config.yaml` (paths, thresholds, URLs)
