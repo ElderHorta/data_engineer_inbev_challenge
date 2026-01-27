@@ -1,0 +1,133 @@
+./brewery-data-pipeline/data/*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+.venv-*/
+bees-venv/
+*-venv/
+pyvenv.cfg
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Airflow
+airflow.db
+airflow.cfg
+airflow-webserver.pid
+standalone_admin_password.txt
+logs/
+airflow_logs/
+dags/__pycache__/
+unittests.cfg
+webserver_config.py
+
+# Data (local storage)
+data/
+*.parquet
+*.csv
+*.json
+*.delta
+*.txt
+!requirements*.txt
+*.avro
+*.orc
+checkpoints/
+spark-warehouse/
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+coverage.xml
+*.cover
+.nox/
+test-results/
+.cache/
+
+# Environment
+.env
+.env.local
+secrets.yaml
+
+# Terraform
+terraform/.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Docker
+.dockerignore
+
+# Spark
+derby.log
+metastore_db/
+spark-warehouse/
+.spark-history/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+.backup/
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+*.ipynb
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Logs (additional patterns)
+*.log
+logs/
+
+# Node.js (if any frontend tooling)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local development
+.python-version
+.tool-versions

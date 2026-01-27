@@ -1,0 +1,272 @@
+api:
+  base_url: "https://api.openbrewerydb.org/v1"
+  endpoints:
+    breweries: "/breweries"
+  timeout: 30
+  retries: 3
+  retry_delay: 5
+  per_page: 200
+  rate_limit:
+    requests_per_minute: 60
+
+# Schema definitions for each layer
+# Why explicit schemas: Prevents type inference errors when API data has inconsistent types
+# (e.g., longitude might be 42 in one record and 42.1234 in another)
+schemas:
+  # Silver layer schema - defines structure for parsed brewery data
+  # Bronze layer stores raw JSON, Silver parses and enforces this schema
+  silver:
+    # Fields from Open Brewery DB API (https://www.openbrewerydb.org/documentation)
+    fields:
+      - name: "id"
+        type: "string"
+        nullable: false
+        description: "Unique identifier for the brewery"
+      - name: "name"
+        type: "string"
+        nullable: false
+        description: "Brewery name"
+      - name: "brewery_type"
+        type: "string"
+        nullable: true
+        description: "Type of brewery (micro, nano, regional, brewpub, large, planning, bar, contract, proprietor, closed)"
+      - name: "address_1"
+        type: "string"
+        nullable: true
+        description: "Primary street address"
+      - name: "address_2"
+        type: "string"
+        nullable: true
+        description: "Secondary address line"
+      - name: "address_3"
+        type: "string"
+        nullable: true
+        description: "Third address line"
+      - name: "city"
+        type: "string"
+        nullable: true
+        description: "City name"
+      - name: "state_province"
+        type: "string"
+        nullable: true
+        description: "State or province"
+      - name: "postal_code"
+        type: "string"
+        nullable: true
+        description: "Postal or ZIP code"
+      - name: "country"
+        type: "string"
+        nullable: true
+        description: "Country name"
+      - name: "longitude"
+        type: "double"
+        nullable: true
+        description: "Longitude coordinate"
+      - name: "latitude"
+        type: "double"
+        nullable: true
+        description: "Latitude coordinate"
+      - name: "phone"
+        type: "string"
+        nullable: true
+        description: "Contact phone number"
+      - name: "website_url"
+        type: "string"
+        nullable: true
+        description: "Brewery website URL"
+      - name: "state"
+        type: "string"
+        nullable: true
+        description: "State abbreviation (deprecated)"
+      - name: "street"
+        type: "string"
+        nullable: true
+        description: "Street address (deprecated)"
+    # Required fields for schema enforcement validation
+    required_fields:
+      - "id"
+      - "name"
+    # Valid brewery types for validation
+    # Note: API returns additional types (taproom, beergarden, cidery, location)
+    # that are mapped to closest valid types via brewery_type_mappings
+    valid_brewery_types:
+      - "micro"
+      - "nano"
+      - "regional"
+      - "brewpub"
+      - "large"
+      - "planning"
+      - "bar"
+      - "contract"
+      - "proprietor"
+      - "closed"
+      - "taproom"     # Added: tasting room attached to brewery
+      - "beergarden"  # Added: outdoor brewery venue
+      - "cidery"      # Added: cider producer (similar to micro)
+      - "location"    # Added: satellite location of main brewery
+    
+storage:
+  type: "local"  # local, s3, gcs, adls
+  base_path: "/data/"
+  
+  layers:
+    bronze:
+      path: "bronze/breweries/"
+      format: "parquet"
+      partition_by: ["ingestion_date"]
+      
+    silver:
+      path: "silver/breweries/"
+      format: "delta"
+      partition_by: ["country", "state"]
+      
+    gold:
+      path: "gold/"
+      format: "delta"
+      partition_by: []
+
+data_quality:
+  thresholds:
+    bronze_min_records: 100
+    silver_quality_score: 0.80
+    gold_completeness: 0.95
+    
+  validations:
+    bronze:
+      - check: "schema_valid"
+        required_fields: ["id", "name", "brewery_type"]
+      - check: "no_empty_records"
+      - check: "record_count_above_threshold"
+        
+    silver:
+      - check: "no_duplicates"
+        unique_key: "id"
+      - check: "required_fields_non_null"
+        fields: ["id", "name", "brewery_type"]
+      - check: "valid_coordinates"
+        latitude_range: [-90, 90]
+        longitude_range: [-180, 180]
+      - check: "valid_brewery_types"
+        allowed_values: ["micro", "nano", "regional", "brewpub", "large", "planning", "bar", "contract", "proprietor", "closed"]
+        
+    gold:
+      - check: "aggregation_sum_matches_source"
+      - check: "no_negative_values"
+      - check: "all_dimensions_present"
+
+transformations:
+  silver:
+    deduplication:
+      key: "id"
+      strategy: "keep_latest"
+      
+    standardization:
+      country:
+        # US variations
+        "united states": "United States"
+        "usa": "United States"
+        "us": "United States"
+        "u.s.a.": "United States"
+        "u.s.": "United States"
+        # UK regions → United Kingdom (for consistent aggregation)
+        "england": "United Kingdom"
+        "scotland": "United Kingdom"
+        "wales": "United Kingdom"
+        "northern ireland": "United Kingdom"
+        "isle of man": "United Kingdom"
+        # Other common variations
+        "republic of ireland": "Ireland"
+        "south korea": "South Korea"
+        "republic of korea": "South Korea"
+      state:
+        normalize: true
+      # Phone number formatting (US format)
+      phone:
+        format: "us"  # Format: (XXX) XXX-XXXX
+        strip_non_digits: true
+      # Postal code cleaning
+      postal_code:
+        strip_trailing_dash: true
+        
+    data_types:
+      longitude: "float"
+      latitude: "float"
+      postal_code: "string"
+      
+    null_handling:
+      empty_strings_to_null: true
+      default_values:
+        country: "Unknown"
+        state: "Unknown"
+        
+  gold:
+    # Brewery Gold layer aggregations created by create_brewery_aggregations()
+    # These aggregations provide business-ready metrics for analytics
+    aggregations:
+      - name: "breweries_by_type"
+        description: "Distribution of brewery types (market composition analysis)"
+        group_by: ["brewery_type"]
+        metrics:
+          - "record_count"
+          - "percentage_of_total"
+          
+      - name: "breweries_by_location"
+        description: "Geographic distribution by country/state (market expansion planning)"
+        group_by: ["country", "state"]
+        metrics:
+          - "record_count"
+          - "percentage_of_total"
+          - "city_count"
+          - "brewery_types"
+          
+      - name: "breweries_by_type_location"
+        description: "Type distribution by location (competitive density analysis)"
+        group_by: ["country", "state", "city", "brewery_type"]
+        metrics:
+          - "record_count"
+          - "percentage_of_total"
+          
+      - name: "brewery_data_quality_metrics"
+        description: "Data health summary (operational monitoring)"
+        metrics:
+          - "total_records"
+          - "avg_quality_score"
+          - "valid_location_count"
+          - "complete_address_count"
+
+monitoring:
+  logging:
+    level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+    format: "json"
+    
+  metrics:
+    enabled: true
+    collect:
+      - "record_counts"
+      - "processing_time"
+      - "data_quality_scores"
+      - "error_rates"
+      
+  alerts:
+    slack:
+      enabled: false
+      webhook_url: "${SLACK_WEBHOOK_URL}"
+      channels:
+        - "#data-engineering"
+      severity_levels: ["CRITICAL", "HIGH"]
+      
+    email:
+      enabled: true
+      recipients:
+        - "data-engineering@company.com"
+      severity_levels: ["CRITICAL", "HIGH", "MEDIUM"]
+
+spark:
+  app_name: "brewery_pipeline"
+  master: "local[*]"
+  config:
+    "spark.driver.memory": "2g"
+    "spark.executor.memory": "2g"
+    "spark.sql.shuffle.partitions": "8"
+    "spark.sql.adaptive.enabled": "true"
+    "spark.sql.adaptive.coalescePartitions.enabled": "true"

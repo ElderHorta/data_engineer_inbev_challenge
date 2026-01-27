@@ -1,0 +1,46 @@
+# Local Development Requirements
+# Python Version: 3.11.9 (see .python-version file)
+# Minimal dependencies for running unit tests and code checks locally
+# Docker uses requirements.txt which includes Airflow and heavier dependencies
+
+# Core dependencies
+pyspark==3.5.0
+delta-spark==3.0.0
+requests==2.31.0
+urllib3==2.1.0
+pyyaml==6.0.1
+python-dotenv==1.0.0
+
+# Data processing (needed for PySpark)
+pandas==2.1.4
+numpy==1.26.4
+pyarrow==14.0.2
+
+# Data exploration & visualization
+matplotlib==3.8.2
+seaborn==0.13.0
+jupyter==1.0.0
+notebook==7.0.6
+ipykernel==6.27.1
+
+# Testing
+pytest==7.4.3
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+pytest-asyncio==0.21.1
+responses==0.25.8  # HTTP request mocking for API tests
+
+# Code quality
+black==23.12.1
+flake8==6.1.0
+mypy==1.7.1
+pylint==3.0.3
+isort==5.13.2  # Import sorting (used by Makefile and CI/CD)
+
+# Security scanning
+safety==3.0.1  # Dependency vulnerability scanning
+bandit==1.7.6  # Security linting for Python code
+
+# Type stubs
+types-requests==2.31.0.10
+types-PyYAML==6.0.12.12

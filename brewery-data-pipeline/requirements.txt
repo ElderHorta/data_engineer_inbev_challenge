@@ -1,0 +1,54 @@
+# Core Dependencies
+apache-airflow==2.8.0
+apache-airflow-providers-apache-spark==4.5.0
+pyspark==3.5.0
+delta-spark==3.0.0
+
+# Data Processing
+pandas==2.1.4
+numpy==1.26.2
+pyarrow==14.0.2
+
+# API & HTTP
+requests==2.31.0
+urllib3==2.1.0
+
+# Data Quality
+great-expectations==0.18.8
+
+# Database
+psycopg2-binary==2.9.9
+sqlalchemy==1.4.50
+
+# Testing
+pytest==7.4.3
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+pytest-asyncio==0.21.1
+responses==0.25.8  # HTTP request mocking for API tests
+
+# Code Quality
+black==23.12.1
+flake8==6.1.0
+mypy==1.7.1
+pylint==3.0.3
+
+# Utilities
+python-dotenv==1.0.0
+pyyaml==6.0.1
+click==8.1.7
+
+# Logging & Monitoring
+structlog==23.2.0
+python-json-logger==2.0.7
+
+# Notifications
+slack-sdk==3.26.1
+
+# Development
+ipython==8.19.0
+jupyter==1.0.0
+
+# Type hints
+types-requests==2.31.0.10
+types-PyYAML==6.0.12.12
