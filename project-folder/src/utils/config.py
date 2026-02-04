@@ -26,13 +26,10 @@ def load_config(config_path: str) -> Dict:
     """
     global _config_cache
     
-    # Return cached config if available
     if _config_cache is not None:
         return _config_cache
     
-    # Check if file exists
     if not os.path.exists(config_path):
-        # Fallback to default configuration
         return get_default_config()
     
     with open(config_path, 'r') as f:

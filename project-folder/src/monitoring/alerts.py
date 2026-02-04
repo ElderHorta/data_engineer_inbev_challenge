@@ -1,12 +1,4 @@
-"""
-Alert Notifications
-
-Handles sending alerts via various channels (Slack, Email, etc.)
-"""
-
-import os
-import requests
-from typing import Optional, Dict, List, Any
+from typing import Dict, List, Any
 from src.utils.logger import get_logger
 from src.utils.config import get_config
 
@@ -15,7 +7,7 @@ logger = get_logger(__name__)
 
 def send_slack_alert(message: str, severity: str = "INFO") -> bool:
     """
-    Send alert to Slack.
+    Send alert to Slack using Airflow's SlackWebhookHook.
     
     Args:
         message: Alert message
@@ -30,13 +22,6 @@ def send_slack_alert(message: str, severity: str = "INFO") -> bool:
         logger.info("Slack alerts disabled, skipping")
         return False
     
-    webhook_url = os.getenv('SLACK_WEBHOOK_URL')
-    
-    if not webhook_url:
-        logger.warning("SLACK_WEBHOOK_URL not configured")
-        return False
-    
-    # Severity emoji mapping
     emoji_map = {
         'CRITICAL': ':rotating_light:',
         'HIGH': ':warning:',
@@ -46,78 +31,80 @@ def send_slack_alert(message: str, severity: str = "INFO") -> bool:
     }
     
     emoji = emoji_map.get(severity, ':bell:')
-    
-    payload = {
-        'text': f"{emoji} *{severity}* Alert\n{message}"
-    }
+    formatted_message = f"{emoji} *{severity}* Alert\n{message}"
     
     try:
-        response = requests.post(webhook_url, json=payload, timeout=10)
-        response.raise_for_status()
-        logger.info("Slack alert sent successfully")
+        from airflow.providers.slack.hooks.slack_webhook import SlackWebhookHook
+
+        hook = SlackWebhookHook(slack_webhook_conn_id='slack_webhook')
+        hook.send(text=formatted_message)
+        logger.info("Slack alert sent successfully via SlackWebhookHook")
         return True
+    except ImportError:
+        logger.warning("Slack provider not installed, skipping alert")
+        return False
     except Exception as e:
         logger.error(f"Failed to send Slack alert: {str(e)}")
         return False
 
 
-def send_failure_alert(dag_id: str, task_id: str, execution_date: str, 
-                      error: str, logs_url: Optional[str] = None) -> None:
+def send_failure_alert(context: Dict[str, Any]) -> None:
     """
-    Send failure alert.
+    Airflow DAG-level failure callback.
+    
+    Called automatically by Airflow when DAG run fails.
+    Extracts context info and sends Slack alert.
     
     Args:
-        dag_id: DAG identifier
-        task_id: Task identifier
-        execution_date: Execution date
-        error: Error message
-        logs_url: URL to logs
+        context: Airflow context dictionary containing:
+            - dag_run: DAGRun object
+            - dag: DAG object
+            - exception: Exception that caused failure (if available)
     """
-    logger.error(f"Pipeline failure: {dag_id}.{task_id}")
+    dag_run = context.get('dag_run')
+    dag_id = dag_run.dag_id if dag_run else 'unknown'
+    execution_date = str(dag_run.execution_date) if dag_run else 'unknown'
+    exception = context.get('exception', context.get('reason', 'Unknown error'))
+    
+    logger.error(f"Pipeline failure: {dag_id} on {execution_date}")
     
     message = f"""
-*Pipeline Failure*
+*Pipeline Failure* :rotating_light:
 
 *DAG*: {dag_id}
-*Task*: {task_id}
 *Execution Date*: {execution_date}
-*Error*: {error}
+*Error*: {exception}
 """
     
-    if logs_url:
-        message += f"\n*Logs*: {logs_url}"
-    
-    # Send to Slack
     send_slack_alert(message, severity="CRITICAL")
-    
-    # In production, also:
-    # - Send email to on-call
-    # - Create PagerDuty incident
-    # - Log to incident management system
 
 
-def send_success_notification(dag_id: str, execution_date: str, message: str) -> None:
+def send_success_notification(context: Dict[str, Any]) -> None:
     """
-    Send success notification.
+    Airflow DAG-level success callback.
+    
+    Called automatically by Airflow when DAG run completes successfully.
     
     Args:
-        dag_id: DAG identifier
-        execution_date: Execution date
-        message: Success message
+        context: Airflow context dictionary containing:
+            - dag_run: DAGRun object
+            - dag: DAG object
     """
-    logger.info(f"Pipeline success: {dag_id}")
+    dag_run = context.get('dag_run')
+    dag_id = dag_run.dag_id if dag_run else 'unknown'
+    execution_date = str(dag_run.execution_date) if dag_run else 'unknown'
     
-    notification = f"""
+    logger.info(f"Pipeline success: {dag_id} on {execution_date}")
+    
+    message = f"""
 *Pipeline Success* :white_check_mark:
 
 *DAG*: {dag_id}
 *Execution Date*: {execution_date}
-*Message*: {message}
+*Status*: All tasks completed successfully
 """
     
-    # Only send success notifications for important pipelines
-    # or on specific schedules (e.g., daily summary)
-    send_slack_alert(notification, severity="INFO")
+    send_slack_alert(message, severity="INFO")
 
 
 def send_data_quality_alert(
