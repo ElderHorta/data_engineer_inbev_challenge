@@ -59,13 +59,3 @@ def get_spark_session(app_name: str = "brewery_pipeline") -> SparkSession:
     logger.info("Spark session created successfully")
     
     return _spark_session
-
-
-def stop_spark_session() -> None:
-    """Stop the Spark session."""
-    global _spark_session
-    
-    if _spark_session is not None:
-        logger.info("Stopping Spark session")
-        _spark_session.stop()
-        _spark_session = None

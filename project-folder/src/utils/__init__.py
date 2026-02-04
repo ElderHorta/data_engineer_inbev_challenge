@@ -10,7 +10,6 @@ from .data_helpers import (
 )
 from .api_helpers import (
     check_api_health,
-    check_url_availability,
 )
 from .schema import (
     build_schema_from_config,
@@ -27,7 +26,6 @@ __all__ = [
     'convert_fields_to_int',
     'normalize_empty_strings',
     'check_api_health',
-    'check_url_availability',
     'build_schema_from_config',
     'build_json_parsing_schema',
     'get_required_fields',

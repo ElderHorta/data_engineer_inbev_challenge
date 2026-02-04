@@ -27,7 +27,6 @@ default_args = {
     'retry_delay': timedelta(minutes=5),
     'retry_exponential_backoff': True,
     'max_retry_delay': timedelta(minutes=30),
-    'on_failure_callback': send_failure_alert,
 }
 
 dag = DAG(
@@ -40,6 +39,7 @@ dag = DAG(
     max_active_runs=1,
     tags=['brewery', 'medallion', 'data-lake', 'api'],
     doc_md=__doc__,
+    on_failure_callback=send_failure_alert,
     on_success_callback=send_success_notification,
 )
 

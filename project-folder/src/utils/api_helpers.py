@@ -58,23 +58,6 @@ def check_api_health(
         
     Raises:
         Exception: If raise_on_failure=True and health check fails
-        
-    Examples:
-        >>> from src.pipelines.brewery.brewery_api_client import BreweryAPIClient
-        >>> client = BreweryAPIClient()
-        >>> check_api_health(client, api_name="Open Brewery DB")
-        True
-        
-        >>> # With custom API client
-        >>> from src.ingestion.weather_api_client import WeatherAPIClient
-        >>> weather_client = WeatherAPIClient()
-        >>> is_healthy = check_api_health(
-        ...     weather_client, 
-        ...     api_name="Weather API",
-        ...     raise_on_failure=False
-        ... )
-        >>> if not is_healthy:
-        ...     print("Weather API is down, using cached data")
     """
     # Use class name if api_name not provided
     if api_name is None:
@@ -98,32 +81,3 @@ def check_api_health(
     
     logger.info(f"{api_name} API health check passed")
     return True
-
-
-def check_url_availability(url: str, timeout: int = 5) -> bool:
-    """
-    Simple check if a URL is reachable.
-    
-    This is a lightweight alternative to full API health checks when you just
-    need to verify basic connectivity.
-    
-    Args:
-        url: URL to check (e.g., "https://api.example.com")
-        timeout: Request timeout in seconds (default: 5)
-        
-    Returns:
-        bool: True if URL responds with 2xx or 3xx status code
-        
-    Example:
-        >>> is_reachable = check_url_availability("https://api.openbrewerydb.org")
-        >>> if not is_reachable:
-        ...     print("API endpoint is not reachable")
-    """
-    import requests
-    
-    try:
-        response = requests.get(url, timeout=timeout)
-        return response.status_code < 400
-    except requests.exceptions.RequestException as e:
-        logger.warning(f"URL {url} is not available: {e}")
-        return False

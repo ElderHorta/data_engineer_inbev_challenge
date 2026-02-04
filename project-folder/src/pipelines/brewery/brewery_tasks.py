@@ -18,25 +18,6 @@ from src.utils.config import get_config
 
 logger = get_logger(__name__)
 
-# Load configuration once at module import time
-# This is cached by get_config() so subsequent calls return same instance
-_config = None
-
-
-def _get_config() -> Dict[str, Any]:
-    """
-    Get pipeline configuration (lazy loading with caching).
-    
-    Why lazy loading:
-    - Avoids config loading during module import in test environments
-    - Allows mocking in unit tests
-    - Config is still loaded once and cached
-    """
-    global _config
-    if _config is None:
-        _config = get_config()
-    return _config
-
 
 def check_brewery_api_health(**context) -> bool:
     """
@@ -115,7 +96,7 @@ def validate_brewery_bronze(**context) -> Dict[str, Any]:
         Exception: If validation fails
     """
     execution_date = context['ds']
-    config = _get_config()
+    config = get_config()
     
     logger.info(f"Starting Bronze validation for {execution_date}")
     
@@ -190,7 +171,7 @@ def validate_brewery_silver(**context) -> Dict[str, Any]:
     Raises:
         Exception: If validation fails
     """
-    config = _get_config()
+    config = get_config()
     execution_date = context['ds']
     
     logger.info(f"Starting Silver validation for {execution_date}")
@@ -486,7 +467,7 @@ def validate_brewery_gold(**context) -> Dict[str, Any]:
     Raises:
         Exception: If validation fails
     """
-    config = _get_config()
+    config = get_config()
     execution_date = context['ds']
     
     logger.info(f"Starting Gold validation for {execution_date}")

@@ -70,27 +70,3 @@ class MetricsCollector:
         # - Store in metrics database
         
         logger.info("Metrics published successfully")
-    
-    def collect_pipeline_metrics(self, dag_run) -> Dict:
-        """
-        Collect metrics for a DAG run.
-        
-        Args:
-            dag_run: Airflow DAG run object
-            
-        Returns:
-            Dict of collected metrics
-        """
-        metrics = {
-            'dag_id': dag_run.dag_id,
-            'run_id': dag_run.run_id,
-            'execution_date': str(dag_run.execution_date),
-            'state': dag_run.state,
-            'duration_seconds': None,
-        }
-        
-        if dag_run.end_date and dag_run.start_date:
-            duration = (dag_run.end_date - dag_run.start_date).total_seconds()
-            metrics['duration_seconds'] = duration
-        
-        return metrics
