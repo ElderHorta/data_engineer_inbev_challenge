@@ -43,9 +43,16 @@ This project now has three deployment automation tools for different environment
 
 # Quick restart (no test, no build)
 .\deploy.ps1 -SkipTests -SkipBuild
+```
 
-# Verbose output
-.\deploy.ps1 -Verbose
+### **PowerShell Execution Policy (Windows)**
+First time running PowerShell scripts may require bypassing execution policy:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy.ps1
+```
+Or set your execution policy once (requires admin):
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
 ---

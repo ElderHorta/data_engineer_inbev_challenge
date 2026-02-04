@@ -21,7 +21,7 @@ Checks Python version, packages, API connectivity, and Docker installation.
 
 ```powershell
 # 1. Create and activate virtual environment
-py -3.11.9 -m venv bees-venv
+py -3.11 -m venv bees-venv
 .\bees-venv\Scripts\Activate.ps1
 
 # 2. Verify Python version
@@ -31,20 +31,23 @@ python --version
 pip install -r requirements-local.txt
 ```
 
-### Hadoop Setup (Required for Local PySpark)
+### Hadoop Setup (Required for Local PySpark + Delta Lake)
 
-PySpark on Windows requires `winutils.exe`. Run once:
+PySpark and Delta Lake on Windows require Hadoop native libraries (`winutils.exe` and `hadoop.dll`). Run once:
 
 ```powershell
 .\setup_hadoop_windows.ps1
 ```
 
-Then **restart your terminal**.
+**⚠️ IMPORTANT: Close and reopen your terminal** after running the setup script. This is required for the PATH changes to take effect.
 
-**Verify:**
+**Verify setup (in a new terminal):**
 ```powershell
 echo $env:HADOOP_HOME  # Should show: C:\hadoop
+$env:PATH -like "*hadoop*"  # Should return True
 ```
+
+> **Note**: The `setup_hadoop_windows.ps1` script adds `C:\hadoop\bin` to your user PATH permanently. If `$env:PATH -like "*hadoop*"` returns False, close and reopen your terminal.
 
 ### Running Local Tests
 
@@ -94,15 +97,7 @@ docker-compose build
 docker-compose up -d
 ```
 
-### Initialize Airflow (first time only)
-
-```powershell
-docker-compose exec airflow-webserver airflow db init
-docker-compose exec airflow-webserver airflow users create `
-    --username admin --password admin `
-    --firstname Admin --lastname User `
-    --role Admin --email admin@example.com
-```
+> **Note**: Airflow initialization (database setup, admin user creation) happens automatically on first startup via the `airflow-init` container. No manual initialization needed.
 
 ### Access Airflow UI
 - **URL**: http://localhost:8080
