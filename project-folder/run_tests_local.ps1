@@ -16,6 +16,12 @@ if (-not $env:HADOOP_HOME) {
     Write-Host "[OK] Set HADOOP_HOME=$env:HADOOP_HOME for this session" -ForegroundColor Yellow
 }
 
+# Add hadoop native libraries to PATH (required for Delta Lake on Windows)
+if ($env:PATH -notlike "*$env:HADOOP_HOME\bin*") {
+    $env:PATH = "$env:HADOOP_HOME\bin;$env:PATH"
+    Write-Host "[OK] Added $env:HADOOP_HOME\bin to PATH for native libraries" -ForegroundColor Yellow
+}
+
 # Activate virtual environment
 $venvPath = ".\bees-venv\Scripts\Activate.ps1"
 if (Test-Path $venvPath) {
