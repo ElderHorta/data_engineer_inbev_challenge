@@ -68,7 +68,6 @@ def extract_brewery_db_api(**context) -> int:
     record_count = len(breweries)
     logger.info(f"Fetched {record_count} breweries from API")
     
-    # Save raw JSON data (append-only, immutable Bronze layer)
     bronze.save_json_data(breweries, execution_date, source='api')
     
     context['task_instance'].xcom_push(key='bronze_record_count', value=record_count)
@@ -102,12 +101,10 @@ def validate_brewery_bronze(**context) -> Dict[str, Any]:
     
     validator = BronzeValidator()
     
-    # Build path from configuration (not hardcoded)
     base_path = config['storage']['base_path']
     bronze_layer_path = config['storage']['layers']['bronze']['path']
     bronze_path = f"{base_path}{bronze_layer_path}"
-    
-    # Pass execution_date to validator for file matching
+
     results = validator.validate(bronze_path, execution_date=execution_date)
     
     if not results['passed']:

@@ -9,14 +9,8 @@ api:
   rate_limit:
     requests_per_minute: 60
 
-# Schema definitions for each layer
-# Why explicit schemas: Prevents type inference errors when API data has inconsistent types
-# (e.g., longitude might be 42 in one record and 42.1234 in another)
 schemas:
-  # Silver layer schema - defines structure for parsed brewery data
-  # Bronze layer stores raw JSON, Silver parses and enforces this schema
   silver:
-    # Fields from Open Brewery DB API (https://www.openbrewerydb.org/documentation)
     fields:
       - name: "id"
         type: "string"
@@ -82,13 +76,9 @@ schemas:
         type: "string"
         nullable: true
         description: "Street address (deprecated)"
-    # Required fields for schema enforcement validation
     required_fields:
       - "id"
       - "name"
-    # Valid brewery types for validation
-    # Note: API returns additional types (taproom, beergarden, cidery, location)
-    # that are mapped to closest valid types via brewery_type_mappings
     valid_brewery_types:
       - "micro"
       - "nano"
@@ -100,13 +90,13 @@ schemas:
       - "contract"
       - "proprietor"
       - "closed"
-      - "taproom"     # Added: tasting room attached to brewery
-      - "beergarden"  # Added: outdoor brewery venue
-      - "cidery"      # Added: cider producer (similar to micro)
-      - "location"    # Added: satellite location of main brewery
+      - "taproom"
+      - "beergarden"
+      - "cidery"
+      - "location"
     
 storage:
-  type: "local"  # local, s3, gcs, adls
+  type: "local"  # local, s3, gcs
   base_path: "/data/"
   
   layers:
@@ -139,20 +129,45 @@ data_quality:
       - check: "record_count_above_threshold"
         
     silver:
-      - check: "no_duplicates"
-        unique_key: "id"
-      - check: "required_fields_non_null"
-        fields: ["id", "name", "brewery_type"]
-      - check: "valid_coordinates"
-        latitude_range: [-90, 90]
-        longitude_range: [-180, 180]
-      - check: "valid_brewery_types"
-        allowed_values: ["micro", "nano", "regional", "brewpub", "large", "planning", "bar", "contract", "proprietor", "closed"]
+      unique_key: id
+      required_fields:
+        - id
+        - name
+      value_ranges:
+        latitude: [-90, 90]
+        longitude: [-180, 180]
+      allowed_values:
+        brewery_type:
+          - micro
+          - nano
+          - regional
+          - brewpub
+          - large
+          - planning
+          - bar
+          - contract
+          - proprietor
+          - closed
+          - taproom
+          - beergarden
+          - cidery
+          - location
+      checks:
+        - check: "no_duplicates"
+          unique_key: "id"
+        - check: "required_fields_non_null"
+          fields: ["id", "name", "brewery_type"]
         
     gold:
-      - check: "aggregation_sum_matches_source"
-      - check: "no_negative_values"
-      - check: "all_dimensions_present"
+      count_columns:
+        - record_count
+        - city_count
+      percentage_columns:
+        - percentage_of_total
+      checks:
+        - check: "aggregation_sum_matches_source"
+        - check: "no_negative_values"
+        - check: "all_dimensions_present"
 
 transformations:
   silver:
@@ -180,11 +195,9 @@ transformations:
         "republic of korea": "South Korea"
       state:
         normalize: true
-      # Phone number formatting (US format)
       phone:
         format: "us"  # Format: (XXX) XXX-XXXX
         strip_non_digits: true
-      # Postal code cleaning
       postal_code:
         strip_trailing_dash: true
         
@@ -200,8 +213,6 @@ transformations:
         state: "Unknown"
         
   gold:
-    # Brewery Gold layer aggregations created by create_brewery_aggregations()
-    # These aggregations provide business-ready metrics for analytics
     aggregations:
       - name: "breweries_by_type"
         description: "Distribution of brewery types (market composition analysis)"

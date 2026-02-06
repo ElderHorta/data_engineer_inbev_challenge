@@ -87,6 +87,7 @@ class BaseValidator(ABC):
         self.spark = spark if spark is not None else get_spark_session()
         self.quality_config = self.config.get('data_quality', {})
         self.thresholds = self.quality_config.get('thresholds', {})
+        self.validations_config = self.quality_config.get('validations', {})
     
     @abstractmethod
     def validate(self, path: str) -> Dict:
@@ -177,18 +178,15 @@ class BronzeValidator(BaseValidator):
         
         results = self._create_result('bronze')
         
-        # Check 0: Directory exists
         clean_path = bronze_path.replace('file://', '')
         if not os.path.exists(clean_path):
             results['passed'] = False
             results['errors'].append(f"Bronze directory does not exist: {bronze_path}")
             return results
         
-        # Find JSON files (optionally filtered by execution_date)
         json_files = []
         for filename in os.listdir(clean_path):
             if filename.endswith('.json'):
-                # If execution_date provided, only include matching files
                 if execution_date:
                     if f"_{execution_date}_" in filename:
                         json_files.append(filename)
@@ -204,7 +202,6 @@ class BronzeValidator(BaseValidator):
         results['metrics']['file_count'] = len(json_files)
         logger.info(f"Found {len(json_files)} JSON file(s) to validate")
         
-        # Read and validate all JSON files
         total_records = 0
         empty_records = 0
         
@@ -221,7 +218,6 @@ class BronzeValidator(BaseValidator):
                 file_count = len(records)
                 total_records += file_count
                 
-                # Count empty records
                 for record in records:
                     if not record or record == {}:
                         empty_records += 1
@@ -235,7 +231,6 @@ class BronzeValidator(BaseValidator):
                 results['passed'] = False
                 results['errors'].append(f"Failed to read {filename}: {str(e)}")
         
-        # Check 1: Record count above threshold
         results['metrics']['record_count'] = total_records
         
         min_records = self.thresholds.get('bronze_min_records', 100)
@@ -247,7 +242,6 @@ class BronzeValidator(BaseValidator):
         else:
             logger.info(f"✓ Record count check passed: {total_records} records")
         
-        # Check 2: Empty records
         results['metrics']['empty_record_count'] = empty_records
         
         if empty_records == total_records:
@@ -306,11 +300,8 @@ class SilverValidator(BaseValidator):
         results = self._create_result('silver')
         results['metrics']['processing_date'] = processing_date
         
-        # Read Silver data
         df = self.spark.read.format('delta').load(silver_path)
         
-        # Filter by processing date if provided
-        # This ensures we only validate the current run's data, not historical snapshots
         if processing_date and '_processing_date' in df.columns:
             df = df.filter(col('_processing_date') == processing_date)
             logger.info(f"Filtered to processing_date={processing_date}")
@@ -318,19 +309,20 @@ class SilverValidator(BaseValidator):
         total_records = df.count()
         results['metrics']['total_records'] = total_records
         
-        # Check 1: No duplicate IDs
-        if 'id' in df.columns:
-            distinct_ids = df.select('id').distinct().count()
+        silver_config = self.validations_config.get('silver', {})
+        unique_key = silver_config.get('unique_key', 'id')
+        
+        if unique_key and unique_key in df.columns:
+            distinct_ids = df.select(unique_key).distinct().count()
             duplicates = total_records - distinct_ids
             
             results['metrics']['duplicate_count'] = duplicates
             
             if duplicates > 0:
                 results['passed'] = False
-                results['errors'].append(f"Found {duplicates} duplicate IDs")
+                results['errors'].append(f"Found {duplicates} duplicate values in '{unique_key}'")
         
-        # Check 2: Required fields non-null
-        required_fields = ['id', 'name']  # Generic - adjust per data source
+        required_fields = silver_config.get('required_fields', [])
         
         for field in required_fields:
             if field in df.columns:
@@ -343,26 +335,39 @@ class SilverValidator(BaseValidator):
                         f"Field '{field}' has {null_count} null values"
                     )
         
-        # Check 3: Valid coordinates (if present)
-        if 'latitude' in df.columns and 'longitude' in df.columns:
-            invalid_coords = df.filter(
-                (col('latitude').isNotNull()) & 
-                (
-                    (col('latitude') < -90) | 
-                    (col('latitude') > 90) |
-                    (col('longitude') < -180) |
-                    (col('longitude') > 180)
-                )
-            ).count()
-            
-            results['metrics']['invalid_coordinates'] = invalid_coords
-            
-            if invalid_coords > 0:
-                results['warnings'].append(
-                    f"Found {invalid_coords} records with invalid coordinates"
-                )
+        value_ranges = silver_config.get('value_ranges', {})
         
-        # Check 4: Data quality score (if column exists)
+        for field, range_limits in value_ranges.items():
+            if field in df.columns and len(range_limits) == 2:
+                min_val, max_val = range_limits
+                invalid_count = df.filter(
+                    (col(field).isNotNull()) & 
+                    ((col(field) < min_val) | (col(field) > max_val))
+                ).count()
+                
+                results['metrics'][f'{field}_out_of_range'] = invalid_count
+                
+                if invalid_count > 0:
+                    results['warnings'].append(
+                        f"Found {invalid_count} records with '{field}' outside range [{min_val}, {max_val}]"
+                    )
+        
+        allowed_values = silver_config.get('allowed_values', {})
+        
+        for field, valid_values in allowed_values.items():
+            if field in df.columns and valid_values:
+                invalid_count = df.filter(
+                    (col(field).isNotNull()) & 
+                    (~col(field).isin(valid_values))
+                ).count()
+                
+                results['metrics'][f'{field}_invalid_values'] = invalid_count
+                
+                if invalid_count > 0:
+                    results['warnings'].append(
+                        f"Found {invalid_count} records with '{field}' having values outside allowed set"
+                    )
+        
         if 'data_quality_score' in df.columns:
             avg_quality_score = df.agg({'data_quality_score': 'avg'}).collect()[0][0]
             
@@ -414,7 +419,7 @@ class GoldValidator(BaseValidator):
         Returns:
             Path to latest matching folder, or None if not found
         """
-        # Check for new timestamped folders first
+
         folder_pattern = f"{aggregation_name}_gold_"
         matching_folders = []
         
@@ -423,7 +428,6 @@ class GoldValidator(BaseValidator):
                 for folder in os.listdir(gold_path):
                     if folder.startswith(folder_pattern):
                         if execution_date:
-                            # Filter by execution_date
                             if f"_gold_{execution_date}_" in folder:
                                 matching_folders.append(folder)
                         else:
@@ -432,14 +436,8 @@ class GoldValidator(BaseValidator):
             logger.warning(f"Error scanning Gold folders: {e}")
         
         if matching_folders:
-            # Sort by timestamp (last part) to get most recent
             matching_folders.sort(reverse=True)
             return os.path.join(gold_path, matching_folders[0])
-        
-        # Fallback to legacy direct folder naming
-        legacy_path = os.path.join(gold_path, aggregation_name)
-        if os.path.exists(legacy_path):
-            return legacy_path
         
         return None
     
@@ -471,7 +469,6 @@ class GoldValidator(BaseValidator):
         
         results = self._create_result('gold')
         
-        # If no expected aggregations provided, just check path exists
         if not expected_aggregations:
             if not os.path.exists(gold_path):
                 results['passed'] = False
@@ -482,9 +479,7 @@ class GoldValidator(BaseValidator):
             self._log_result(results)
             return results
         
-        # Check each aggregation exists and is valid
         for agg in expected_aggregations:
-            # Use new folder finding logic (supports timestamped and legacy naming)
             agg_path = self._find_aggregation_folder(gold_path, agg, execution_date)
             
             if agg_path is None:
@@ -492,7 +487,6 @@ class GoldValidator(BaseValidator):
                 results['errors'].append(f"Missing aggregation: {agg}")
                 continue
             
-            # Read aggregation
             try:
                 df = self.spark.read.format('delta').load(agg_path)
                 count = df.count()
@@ -504,7 +498,6 @@ class GoldValidator(BaseValidator):
                         f"Aggregation '{agg}' has no records"
                     )
                 
-                # Check no negative values in count columns
                 count_columns = [c for c in df.columns if 'count' in c.lower()]
                 
                 for col_name in count_columns:
@@ -516,13 +509,13 @@ class GoldValidator(BaseValidator):
                             f"Found {negative_count} negative values in {agg}.{col_name}"
                         )
                 
-                # Check percentage columns are in valid range (0-100)
-                pct_columns = [
-                    c for c in df.columns 
-                    if 'percent' in c.lower() or 'pct' in c.lower()
-                ]
+                gold_config = self.validations_config.get('gold', {})
+                percentage_columns = gold_config.get('percentage_columns', [])
                 
-                for col_name in pct_columns:
+                for col_name in percentage_columns:
+                    if col_name not in df.columns:
+                        continue
+                        
                     invalid_pct = df.filter(
                         (col(col_name) < 0) | (col(col_name) > 100)
                     ).count()
@@ -569,7 +562,6 @@ class DataQualityValidator:
         self.config = config if config is not None else get_config()
         self.spark = spark if spark is not None else get_spark_session()
         
-        # Create specialized validators
         self.bronze_validator = BronzeValidator(config=self.config, spark=self.spark)
         self.silver_validator = SilverValidator(config=self.config, spark=self.spark)
         self.gold_validator = GoldValidator(config=self.config, spark=self.spark)
