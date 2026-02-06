@@ -139,6 +139,10 @@ class BronzeLayer:
         
         record_count = len(records)
         
+        logger.info(f"\nFirst 5 records to save to Bronze:")
+        for i, record in enumerate(records[:5], 1):
+            logger.info(f"  Record {i}: {json.dumps(record, ensure_ascii=False)}")
+        
         now = datetime.now()
         now_timestamp = now.strftime("%Y%m%d_%H%M%S")
         filename = f"brewery_bronze_{source}_{execution_date}_{now_timestamp}.json"

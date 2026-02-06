@@ -17,8 +17,8 @@ from typing import Dict, Optional, Callable, List
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.functions import (
     col, trim, upper, lower, when, regexp_replace,
-    coalesce, lit, current_timestamp, 
-    row_number, desc, from_json, get_json_object, max as spark_max
+    coalesce, lit, current_timestamp,
+    row_number, desc, from_json
 )
 from pyspark.sql.window import Window
 from pyspark.sql.types import FloatType, DoubleType, StructType, StructField, StringType
@@ -26,7 +26,7 @@ from pyspark.sql.types import FloatType, DoubleType, StructType, StructField, St
 from src.utils.logger import get_logger
 from src.utils.config import get_config
 from src.utils.spark_session import get_spark_session
-from src.utils.schema import build_json_parsing_schema, get_field_types, get_required_fields
+from src.utils.schema import build_json_parsing_schema, get_field_types
 
 logger = get_logger(__name__)
 
@@ -68,7 +68,7 @@ class SilverLayer:
         source_filter: Optional[str] = None,
     ) -> DataFrame:
         """
-        GENERIC method to load and deduplicate data from Bronze layer JSON files.
+        Generic method to load and deduplicate data from Bronze layer JSON files.
         
         This is a reusable method for any data source stored in Bronze layer as JSON files.
         Bronze layer stores raw data (append-only, immutable).
@@ -94,26 +94,6 @@ class SilverLayer:
         Returns:
             DataFrame with deduplicated records (most recent version of each)
             
-        Example - Brewery data:
-            >>> df = silver.load_from_bronze_json(
-            ...     ingestion_date="2026-01-23",
-            ...     id_column="id",
-            ...     payload_parser=self._parse_brewery_payload,
-            ...     source_filter="api"
-            ... )
-            
-        Example - Weather data (hypothetical):
-            >>> df = silver.load_from_bronze_json(
-            ...     ingestion_date="2026-01-23",
-            ...     id_column="station_id",
-            ...     payload_parser=self._parse_weather_payload,
-            ...     source_filter="noaa"
-            ... )
-            
-        Why this design (Open/Closed Principle):
-        - Open for extension: Add new data sources by creating new parsers
-        - Closed for modification: Core loading/deduplication logic unchanged
-        - Each data source only needs to implement its payload_parser function
         """
 
         logger.info(f"Loading Bronze data for ingestion_date={ingestion_date}")
@@ -163,9 +143,25 @@ class SilverLayer:
         
         bronze_df = self.spark.createDataFrame(bronze_records)
         
-        logger.info("Parsing JSON payloads from Bronze")
+        logger.info("\nTop 5 rows from Bronze DataFrame:")
+        bronze_df.show(5, truncate=False)
+        
+        logger.info("\nBottom 5 rows from Bronze DataFrame:")
+        tail_rows = bronze_df.tail(5)
+        if tail_rows:
+            tail_df = self.spark.createDataFrame(tail_rows, bronze_df.schema)
+            tail_df.show(truncate=False)
+        
+        logger.info("\nParsing JSON payloads from Bronze")
         parsed_df = payload_parser(bronze_df)
-        logger.info(f"Deduplicating by '{id_column}', keeping most recent (_ingest_ts)")
+        
+        parsed_count = parsed_df.count()
+        logger.info(f"\n{parsed_count} rows were loaded after parsing")
+        
+        logger.info("Top 5 rows after JSON parsing:")
+        parsed_df.show(5, truncate=False)
+        
+        logger.info(f"\nDeduplicating by '{id_column}', keeping most recent (_ingest_ts)")
         
         window = Window.partitionBy(id_column).orderBy(desc("_ingest_ts"))
         
@@ -189,20 +185,10 @@ class SilverLayer:
         """
         Transform Brewery data from Bronze to Silver layer for a specific date.
         
-        This is a BREWERY-SPECIFIC orchestration method that:
         1. Loads Bronze JSON data using the generic load_from_bronze_json method
         2. Applies brewery-specific parsing via _parse_brewery_payload
         3. Applies brewery-specific transformations (schema, standardization, quality)
         4. Saves to Silver layer with brewery partitioning
-        
-        For other data sources (e.g., weather, orders), create similar methods:
-        - transform_weather_to_silver()
-        - transform_orders_to_silver()
-        
-        Each would use load_from_bronze_json() with their own:
-        - id_column (unique identifier for that data)
-        - payload_parser (parsing function for that data's JSON structure)
-        - source_filter (filename pattern for that data)
         
         Args:
             ingestion_date: Airflow execution date (YYYY-MM-DD format)
@@ -211,10 +197,6 @@ class SilverLayer:
         Returns:
             Dict with transformation metrics
             
-        Why brewery-specific:
-        - Uses 'id' as unique identifier (brewery ID from Open Brewery DB)
-        - Uses 'api' source filter (matches brewery_bronze_api_*.json files)
-        - Applies brewery-specific transformations (type, location standardization)
         """
         logger.info(f"Starting Brewery Bronze to Silver transformation for {ingestion_date}")
         
@@ -645,31 +627,3 @@ class SilverLayer:
             processing_date=processing_date,
             partition_columns=self.silver_config.get('partition_by', ['country', 'state']),
         )
-    
-    def read_silver_data(self, processing_date: Optional[str] = None) -> DataFrame:
-        """
-        Read Silver layer data.
-        
-        Args:
-            processing_date: Optional date filter (YYYY-MM-DD)
-                            If provided, reads only that date's partition
-                            If None, reads all data
-                            
-        Returns:
-            DataFrame with Silver layer data
-        """
-        silver_path = os.path.join(
-            self.base_path,
-            self.silver_config['path']
-        )
-        
-        logger.info(f"Reading Silver data from {silver_path}")
-        
-        df = self.spark.read.format('delta').load(silver_path)
-        logger.info("Read Silver data (Delta format)")
-        
-        if processing_date and '_processing_date' in df.columns:
-            df = df.filter(col('_processing_date') == processing_date)
-            logger.info(f"Filtered to processing_date={processing_date}")
-        
-        return df

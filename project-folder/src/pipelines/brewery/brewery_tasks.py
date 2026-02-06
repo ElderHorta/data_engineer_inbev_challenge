@@ -220,8 +220,6 @@ def aggregate_brewery_to_gold(**context) -> Dict[str, Any]:
     logger.info(f"Starting Gold aggregation for {execution_date}")
     
     metrics = create_brewery_aggregations(execution_date)
-    
-    # Push to XCom for metrics collection
     context['task_instance'].xcom_push(key='gold_metrics', value=metrics)
     
     logger.info(f"Gold aggregation complete for {execution_date}: {metrics}")
@@ -250,9 +248,8 @@ def create_brewery_aggregations(execution_date: str) -> Dict[str, Any]:
     logger.info(f"Starting brewery Gold layer aggregations for {execution_date}")
     
     gold = GoldLayer()
-    silver = SilverLayer()
     
-    df = silver.read_silver_data()
+    df = gold.read_silver_data()
     total_records = df.count()
     logger.info(f"Total brewery records in Silver: {total_records}")
     
