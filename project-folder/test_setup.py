@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Quick Setup Test Script
 
@@ -76,12 +75,11 @@ def test_config_loading():
     print("=" * 60)
     
     try:
-        # Add src to path
         src_path = os.path.join(os.path.dirname(__file__), 'src')
         if src_path not in sys.path:
             sys.path.insert(0, src_path)
         
-        from utils.config import load_config, get_default_config
+        from utils.config import load_config
         
         try:
             config = load_config()
@@ -89,8 +87,8 @@ def test_config_loading():
             print(f"  Storage type: {config.get('storage', {}).get('type', 'unknown')}")
             print(f"  Base path: {config.get('storage', {}).get('base_path', 'unknown')}")
         except FileNotFoundError:
-            print("⚠ YAML config not found, using defaults")
-            config = get_default_config()
+            print("✗ YAML config not found - configuration is required")
+            return False
         
         return True
     except Exception as e:
@@ -143,7 +141,6 @@ def test_docker():
         if result.returncode == 0:
             print(f"✓ Docker installed: {result.stdout.strip()}")
             
-            # Test Docker daemon
             result = subprocess.run(['docker', 'ps'], 
                                   capture_output=True, 
                                   text=True, 
