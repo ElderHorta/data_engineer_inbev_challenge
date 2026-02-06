@@ -265,45 +265,67 @@ class TestSilverValidator:
     
     def test_validate_detects_null_required_fields(self, spark, test_data_dir):
         """Test that validation detects null values in required fields."""
-        config = {'quality': {'thresholds': {}}}
-        
-        # Create data with null name
+        config = {
+            'data_quality': {
+                'validations': {
+                    'silver': {
+                        'unique_key': 'id',
+                        'required_fields': ['name']
+                    }
+                }
+            },
+            'quality': {'thresholds': {}}
+        }
+
         data = [
             {'id': '1', 'name': 'Brewery 1'},
-            {'id': '2', 'name': None},  # Null name
+            {'id': '2', 'name': None},
             {'id': '3', 'name': 'Brewery 3'}
         ]
         df = spark.createDataFrame(data)
-        
+
         silver_path = os.path.join(test_data_dir, 'null_silver')
         df.write.format('delta').mode('overwrite').save(silver_path)
-        
+
         validator = SilverValidator(config=config, spark=spark)
         result = validator.validate(silver_path)
-        
-        assert result['passed'] == False
+
+        assert result['passed'] is False
         assert result['metrics']['name_null_count'] == 1
     
     def test_validate_detects_invalid_coordinates(self, spark, test_data_dir):
         """Test that validation warns about invalid coordinates."""
-        config = {'quality': {'thresholds': {}}}
-        
-        # Create data with invalid coordinates
+        config = {
+            'data_quality': {
+                'validations': {
+                    'silver': {
+                        'unique_key': 'id',
+                        'value_ranges': {
+                            'latitude': [-90, 90],
+                            'longitude': [-180, 180]
+                        }
+                    }
+                }
+            },
+            'quality': {'thresholds': {}}
+        }
+
         data = [
             {'id': '1', 'name': 'Valid', 'latitude': 39.7392, 'longitude': -104.9903},
-            {'id': '2', 'name': 'Invalid Lat', 'latitude': 200.0, 'longitude': -105.0},  # Invalid
-            {'id': '3', 'name': 'Invalid Lon', 'latitude': 40.0, 'longitude': -300.0}    # Invalid
+            {'id': '2', 'name': 'Invalid Lat', 'latitude': 200.0, 'longitude': -105.0},
+            {'id': '3', 'name': 'Invalid Lon', 'latitude': 40.0, 'longitude': -300.0}
         ]
         df = spark.createDataFrame(data)
-        
+
         silver_path = os.path.join(test_data_dir, 'coords_silver')
         df.write.format('delta').mode('overwrite').save(silver_path)
-        
+
         validator = SilverValidator(config=config, spark=spark)
         result = validator.validate(silver_path)
-        
-        assert result['metrics']['invalid_coordinates'] == 2
-        assert any('coordinate' in w.lower() for w in result['warnings'])
+
+        assert result['metrics']['latitude_out_of_range'] == 1
+        assert result['metrics']['longitude_out_of_range'] == 1
+        assert any('latitude' in w.lower() or 'longitude' in w.lower() for w in result['warnings'])
     
     def test_validate_valid_data_passes(self, spark, test_data_dir, sample_silver_data):
         """Test that validation passes for valid data."""
@@ -409,24 +431,24 @@ class TestGoldValidator:
     def test_validate_all_aggregations_exist_passes(self, spark, test_data_dir):
         """Test that validation passes when all expected aggregations exist."""
         config = {'quality': {'thresholds': {}}}
-        
+
         gold_path = os.path.join(test_data_dir, 'complete_gold')
         os.makedirs(gold_path, exist_ok=True)
-        
-        # Create expected aggregations
+
         for agg_name in ['breweries_by_type', 'breweries_by_location']:
+            folder_name = f'{agg_name}_gold_2026-01-25_20260125_120000'
             data = [{'dimension': 'X', 'record_count': 10, 'percentage': 50.0}]
             spark.createDataFrame(data).write.format('delta').mode('overwrite').save(
-                os.path.join(gold_path, agg_name)
+                os.path.join(gold_path, folder_name)
             )
-        
+
         validator = GoldValidator(config=config, spark=spark)
         result = validator.validate(
             gold_path,
             expected_aggregations=['breweries_by_type', 'breweries_by_location']
         )
-        
-        assert result['passed'] == True
+
+        assert result['passed'] is True
         assert result['metrics']['breweries_by_type_count'] == 1
         assert result['metrics']['breweries_by_location_count'] == 1
     
@@ -520,64 +542,82 @@ class TestGoldValidator:
     
     def test_validate_detects_negative_counts(self, spark, test_data_dir):
         """Test that validation fails when count columns have negative values."""
-        config = {'quality': {'thresholds': {}}}
-        
+        config = {
+            'data_quality': {
+                'validations': {
+                    'gold': {
+                        'count_columns': ['record_count']
+                    }
+                }
+            },
+            'quality': {'thresholds': {}}
+        }
+
         gold_path = os.path.join(test_data_dir, 'negative_gold')
         os.makedirs(gold_path, exist_ok=True)
-        
-        # Create aggregation with negative count
+
+        folder_name = 'bad_counts_gold_2026-01-25_20260125_120000'
         data = [
             {'type': 'A', 'record_count': 10},
-            {'type': 'B', 'record_count': -5}  # Invalid negative
+            {'type': 'B', 'record_count': -5}
         ]
         spark.createDataFrame(data).write.format('delta').mode('overwrite').save(
-            os.path.join(gold_path, 'bad_counts')
+            os.path.join(gold_path, folder_name)
         )
-        
+
         validator = GoldValidator(config=config, spark=spark)
         result = validator.validate(gold_path, expected_aggregations=['bad_counts'])
-        
-        assert result['passed'] == False
+
+        assert result['passed'] is False
         assert any('negative' in e.lower() for e in result['errors'])
     
     def test_validate_warns_invalid_percentages(self, spark, test_data_dir):
         """Test that validation warns about invalid percentage values."""
-        config = {'quality': {'thresholds': {}}}
-        
+        config = {
+            'data_quality': {
+                'validations': {
+                    'gold': {
+                        'percentage_columns': ['percentage']
+                    }
+                }
+            },
+            'quality': {'thresholds': {}}
+        }
+
         gold_path = os.path.join(test_data_dir, 'pct_gold')
         os.makedirs(gold_path, exist_ok=True)
-        
-        # Create aggregation with invalid percentage
+
+        folder_name = 'bad_pct_gold_2026-01-25_20260125_120000'
         data = [
             {'type': 'A', 'record_count': 10, 'percentage': 50.0},
-            {'type': 'B', 'record_count': 5, 'percentage': 150.0}  # Invalid > 100
+            {'type': 'B', 'record_count': 5, 'percentage': 150.0}
         ]
         spark.createDataFrame(data).write.format('delta').mode('overwrite').save(
-            os.path.join(gold_path, 'bad_pct')
+            os.path.join(gold_path, folder_name)
         )
-        
+
         validator = GoldValidator(config=config, spark=spark)
         result = validator.validate(gold_path, expected_aggregations=['bad_pct'])
-        
+
         assert any('percentage' in w.lower() for w in result['warnings'])
     
     def test_validate_empty_aggregation_warns(self, spark, test_data_dir):
         """Test that validation warns when aggregation has no records."""
         config = {'quality': {'thresholds': {}}}
-        
+
         gold_path = os.path.join(test_data_dir, 'empty_gold')
         os.makedirs(gold_path, exist_ok=True)
-        
-        # Create empty aggregation
+
+        folder_name = 'empty_agg_gold_2026-01-25_20260125_120000'
         schema = "type STRING, record_count INT"
         empty_df = spark.createDataFrame([], schema)
         empty_df.write.format('delta').mode('overwrite').save(
-            os.path.join(gold_path, 'empty_agg')
+            os.path.join(gold_path, folder_name)
         )
-        
+
         validator = GoldValidator(config=config, spark=spark)
         result = validator.validate(gold_path, expected_aggregations=['empty_agg'])
-        
+
         assert any('no records' in w.lower() for w in result['warnings'])
 
 
@@ -630,20 +670,21 @@ class TestDataQualityValidatorFacade:
     def test_validate_gold_delegates(self, spark, test_data_dir):
         """Test that validate_gold delegates to GoldValidator."""
         config = {'quality': {'thresholds': {}}}
-        
+
         gold_path = os.path.join(test_data_dir, 'facade_gold')
         os.makedirs(gold_path, exist_ok=True)
-        
+
+        folder_name = 'test_agg_gold_2026-01-25_20260125_120000'
         data = [{'type': 'A', 'record_count': 10}]
         spark.createDataFrame(data).write.format('delta').mode('overwrite').save(
-            os.path.join(gold_path, 'test_agg')
+            os.path.join(gold_path, folder_name)
         )
-        
+
         facade = DataQualityValidator(config=config, spark=spark)
         result = facade.validate_gold(gold_path, expected_aggregations=['test_agg'])
-        
+
         assert result['layer'] == 'gold'
-        assert result['passed'] == True
+        assert result['passed'] is True
     
     def test_run_all_validations(self, spark, test_data_dir, sample_bronze_json_data, sample_silver_data):
         """Test that run_all_validations runs all three validators."""

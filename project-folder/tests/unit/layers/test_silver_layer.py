@@ -482,22 +482,23 @@ class TestSilverLayerSaveAndRead:
                 'base_path': test_data_dir,
                 'layers': {
                     'bronze': {'path': 'bronze/', 'format': 'json'},
-                    'silver': {'path': 'silver/breweries/', 'format': 'delta'}
+                    'silver': {'path': 'silver/breweries/', 'format': 'delta'},
+                    'gold': {'path': 'gold/', 'format': 'delta'}
                 }
             },
             'schemas': {'silver': {'fields': []}}
         }
-        
-        # First create some data using save_to_silver
+
         silver = SilverLayer(config=config, spark=spark)
-        
+
         data = [{'id': '1', 'name': 'Test Brewery', 'country': 'USA', 'state': 'CO'}]
         df = spark.createDataFrame(data)
         silver.save_to_silver(df, processing_date='2026-01-25')
-        
-        # Now test read
-        result = silver.read_silver_data()
-        
+
+        from src.layers.gold_layer import GoldLayer
+        gold = GoldLayer(config=config, spark=spark)
+        result = gold.read_silver_data()
+
         assert result.count() == 1
         assert result.collect()[0]['name'] == 'Test Brewery'
 
