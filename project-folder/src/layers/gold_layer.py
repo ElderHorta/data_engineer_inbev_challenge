@@ -80,6 +80,7 @@ class GoldLayer:
         self.spark = spark if spark is not None else get_spark_session()
         self.base_path = self.config['storage']['base_path']
         self.gold_config = self.config['storage']['layers']['gold']
+        self.silver_config = self.config['storage']['layers']['silver']
     
     def _aggregate_by_dimensions(
         self,
@@ -271,3 +272,37 @@ class GoldLayer:
             )
         
         return self.spark.read.format('delta').load(gold_path)
+    
+    def read_silver_data(self, processing_date: Optional[str] = None) -> DataFrame:
+        """
+        Read Silver layer data.
+        
+        Args:
+            processing_date: Optional date filter (YYYY-MM-DD)
+                            If provided, reads only that date's partition
+                            If None, reads all data
+                            
+        Returns:
+            DataFrame with Silver layer data
+        """
+        silver_path = os.path.join(
+            self.base_path,
+            self.silver_config['path']
+        )
+        
+        logger.info(f"Reading Silver data from {silver_path}")
+        
+        df = self.spark.read.format('delta').load(silver_path)
+        logger.info("Read Silver data (Delta format)")
+
+        row_count = df.count()
+        logger.info(f"\n{row_count} rows were loaded from Silver layer")
+        
+        logger.info("Top 5 rows from Silver layer:")
+        df.show(5, truncate=False)
+        
+        if processing_date and '_processing_date' in df.columns:
+            df = df.filter(col('_processing_date') == processing_date)
+            logger.info(f"Filtered to processing_date={processing_date}")
+        
+        return df
